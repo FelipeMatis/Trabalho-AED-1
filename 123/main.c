@@ -3,139 +3,119 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
-
-#define PRIORITARIO 1
-#define COMUM       0
-#define MAX_NOME 50
-
-typedef struct Cliente {
-    int id;
-    time_t tempo_chegada;
-    char nome[MAX_NOME];
-    int idade;
-    char sexo;
-    int prioridade;
-} Cliente;
-
-typedef struct NoFila {
-    Cliente cliente;
-    struct NoFila *proximo;
-} NoFila;
-
-typedef struct Fila {
-    NoFila *inicio;
-    NoFila *fim;
-} Fila;
+#include "FilaPrioridade.h"
 
 int id_global = 1;
 
-void inicializarFila(Fila *fila) {
+void inicializarFila(FilaPrioridade* fila) {
     fila->inicio = NULL;
     fila->fim = NULL;
 }
 
-int filaVazia(Fila *fila) {
-    return (fila->inicio == NULL);
-}
-
-void inserirNaFila(Fila *fila, Cliente novoCliente) {
-    NoFila *novoNo = (NoFila *)malloc(sizeof(NoFila));
+void inserirNaFila(FilaPrioridade* fila, Cliente novoCliente) {
+    NoFila* novoNo = (NoFila*)malloc(sizeof(NoFila));
     if (novoNo == NULL) {
-        printf("Erro de alocacao de memoria!\n");
+        fprintf(stderr, "Erro: Falha na alocacao de memoria para novo cliente.\n");
         exit(EXIT_FAILURE);
     }
     novoNo->cliente = novoCliente;
     novoNo->proximo = NULL;
 
-    if (filaVazia(fila)) {
-        fila->inicio = novoNo;
-        fila->fim = novoNo;
-        printf("Cliente '%s' (ID: %d) adicionado a fila.\n", novoCliente.nome, novoCliente.id);
-        return;
-    }
-
-    NoFila *atual = fila->inicio;
-    NoFila *anterior = NULL;
-
-    while (atual != NULL) {
-        if (novoCliente.prioridade == PRIORITARIO && atual->cliente.prioridade == COMUM) {
-            break;
-        }
-        if (novoCliente.prioridade == atual->cliente.prioridade && novoCliente.tempo_chegada < atual->cliente.tempo_chegada) {
-            break;
-        }
-        anterior = atual;
-        atual = atual->proximo;
-    }
-
-    if (anterior == NULL) {
+    if (filaVazia(fila) || (novoCliente.prioridade == PRIORITARIO && fila->inicio->cliente.prioridade == COMUM)) {
         novoNo->proximo = fila->inicio;
         fila->inicio = novoNo;
+        if (fila->fim == NULL) {
+            fila->fim = novoNo;
+        }
     } else {
-        novoNo->proximo = atual;
-        anterior->proximo = novoNo;
+        NoFila* atual = fila->inicio;
+        NoFila* anterior = NULL;
+
+        while (atual != NULL &&
+               (atual->cliente.prioridade == PRIORITARIO ||
+                (novoCliente.prioridade == COMUM && atual->cliente.prioridade == COMUM &&
+                 atual->cliente.tempo_chegada <= novoCliente.tempo_chegada)))
+        {
+            anterior = atual;
+            atual = atual->proximo;
+        }
+
+        if (anterior == NULL) {
+            novoNo->proximo = fila->inicio;
+            fila->inicio = novoNo;
+        } else {
+            novoNo->proximo = atual;
+            anterior->proximo = novoNo;
+        }
+        
         if (atual == NULL) {
             fila->fim = novoNo;
         }
     }
-    printf("Cliente '%s' (ID: %d) adicionado a fila.\n", novoCliente.nome, novoCliente.id);
+    printf("Cliente %s (ID: %d) adicionado a fila com sucesso.\n", novoCliente.nome, novoCliente.id);
 }
 
-Cliente removerDaFila(Fila *fila) {
+Cliente removerDaFila(FilaPrioridade* fila) {
     if (filaVazia(fila)) {
-        printf("Erro: Fila vazia.\n");
-        Cliente clienteVazio = {0};
-        return clienteVazio;
+        fprintf(stderr, "Erro: Tentativa de remover cliente de fila vazia.\n");
+        exit(EXIT_FAILURE);
     }
+    NoFila* noRemover = fila->inicio;
+    Cliente clienteAtendido = noRemover->cliente;
 
-    NoFila *noRemovido = fila->inicio;
-    Cliente clienteAtendido = noRemovido->cliente;
     fila->inicio = fila->inicio->proximo;
-
     if (fila->inicio == NULL) {
         fila->fim = NULL;
     }
-    free(noRemovido);
+    free(noRemover);
     return clienteAtendido;
 }
 
-void mostrarFila(Fila *fila, time_t tempo_atual, const char *titulo) {
+void mostrarFila(FilaPrioridade* fila, time_t tempoAtual, const char* titulo) {
+    printf("\n--- %s ---\n", titulo);
     if (filaVazia(fila)) {
-        printf("%s: Fila vazia.\n", titulo);
+        printf("A fila esta vazia.\n");
         return;
     }
 
-    printf("\n--- %s ---\n", titulo);
-    NoFila *atual = fila->inicio;
-    int i = 1;
+    NoFila* atual = fila->inicio;
+    printf("ID\tNome\tIdade\tSexo\tPrioridade\tTempo de Espera\n");
+    printf("--\t----\t-----\t----\t----------\t----------------\n");
     while (atual != NULL) {
-        double tempo_na_fila = difftime(tempo_atual, atual->cliente.tempo_chegada);
-        printf("%d. ID: %d | Nome: %s | Idade: %d | Sexo: %c | Prioridade: %s | Tempo na fila: %.0f segundos\n",
-               i++,
+        double tempo_espera_segundos = difftime(tempoAtual, atual->cliente.tempo_chegada);
+        int minutos = (int)(tempo_espera_segundos / 60);
+        int segundos = (int)tempo_espera_segundos % 60;
+
+        printf("%d\t%s\t%d\t%c\t%s\t\t%02d:%02d\n",
                atual->cliente.id,
                atual->cliente.nome,
                atual->cliente.idade,
                atual->cliente.sexo,
                atual->cliente.prioridade == PRIORITARIO ? "Prioritario" : "Comum",
-               tempo_na_fila);
+               minutos, segundos);
         atual = atual->proximo;
     }
-    printf("------------------------\n\n");
+    printf("--------------------------------------------\n");
 }
 
-void liberarFila(Fila *fila) {
-    NoFila *atual = fila->inicio;
+void liberarFila(FilaPrioridade* fila) {
+    NoFila* atual = fila->inicio;
     while (atual != NULL) {
-        NoFila *proximo = atual->proximo;
+        NoFila* proximo = atual->proximo;
         free(atual);
         atual = proximo;
     }
     fila->inicio = NULL;
     fila->fim = NULL;
+    printf("Memoria da fila liberada.\n");
+}
+
+int filaVazia(FilaPrioridade* fila) {
+    return fila->inicio == NULL;
 }
 
 int main() {
-    Fila fila;
+    FilaPrioridade fila;
     inicializarFila(&fila);
 
     int opcao;
@@ -147,7 +127,12 @@ int main() {
         printf("3. Mostrar fila\n");
         printf("4. Sair\n");
         printf("Escolha uma opcao: ");
-        scanf("%d", &opcao);
+        
+        if (scanf("%d", &opcao) != 1) {
+            printf("Entrada invalida. Por favor, digite um numero.\n");
+            while (getchar() != '\n'); 
+            continue;
+        }
         getchar();
 
         if (opcao == 1) {
@@ -160,34 +145,40 @@ int main() {
             cliente.nome[strcspn(cliente.nome, "\n")] = 0;
 
             printf("Idade: ");
-            scanf("%d", &cliente.idade);
+            if (scanf("%d", &cliente.idade) != 1 || cliente.idade < 0) {
+                printf("Idade invalida. Por favor, digite um numero positivo.\n");
+                while (getchar() != '\n');
+                continue;
+            }
             getchar();
 
             printf("Sexo (M/F): ");
             char sexo_resposta[10];
             fgets(sexo_resposta, sizeof(sexo_resposta), stdin);
             cliente.sexo = toupper(sexo_resposta[0]);
+            if (cliente.sexo != 'M' && cliente.sexo != 'F') {
+                printf("Sexo invalido. Digite 'M' ou 'F'.\n");
+                continue;
+            }
 
-            char resposta[10];
             int ehPrioritario = 0;
+            char resposta[10];
 
             if (cliente.idade >= 60) {
                 ehPrioritario = 1;
             } else {
-                if (cliente.sexo == 'F') {
-                    if(cliente.idade >= 13 && cliente.idade <= 60){
-                        printf("Gestante? (s/n): ");
+                if (cliente.sexo == 'F' && cliente.idade >= 13 && cliente.idade <= 60) {
+                    printf("Gestante? (s/n): ");
                     fgets(resposta, sizeof(resposta), stdin);
-                    if (resposta[0] == 's' || resposta[0] == 'S') {
+                    if (tolower(resposta[0]) == 's') {
                         ehPrioritario = 1;
-                    }
                     }
                 }
 
                 if (!ehPrioritario) {
                     printf("Deficiencia fisica ou mental? (s/n): ");
                     fgets(resposta, sizeof(resposta), stdin);
-                    if (resposta[0] == 's' || resposta[0] == 'S') {
+                    if (tolower(resposta[0]) == 's') {
                         ehPrioritario = 1;
                     }
                 }
@@ -208,10 +199,12 @@ int main() {
             }
 
         } else if (opcao == 3) {
-            mostrarFila(&fila, time(NULL), "Fila de Atendimento");
+            time_t tempoAtual = time(NULL);
+            mostrarFila(&fila, tempoAtual, "Fila de Atendimento Atual");
 
         } else if (opcao == 4) {
             printf("Encerrando o sistema de atendimento.\n");
+
         } else {
             printf("Opcao invalida. Por favor, tente novamente.\n");
         }

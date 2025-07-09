@@ -1,28 +1,37 @@
-
 #ifndef FILA_PRIORIDADE_H
 #define FILA_PRIORIDADE_H
 
-typedef struct {
+#include <time.h>
+
+#define PRIORITARIO 1
+#define COMUM       0
+#define MAX_NOME 50
+
+typedef struct Cliente {
     int id;
-    int tipo; // 0 = pouso, 1 = decolagem
-    int prioridade; // 1 = alta, 2 = média
-    int tempo_chegada;
-} Voo;
+    time_t tempo_chegada;
+    char nome[MAX_NOME];
+    int idade;
+    char sexo;
+    int prioridade;
+} Cliente;
 
-typedef struct Nodo {
-    Voo voo;
-    struct Nodo* prox;
-} Nodo;
+typedef struct NoFila {
+    Cliente cliente;
+    struct NoFila* proximo;
+} NoFila;
 
-typedef struct {
-    Nodo* inicio;
+typedef struct FilaPrioridade {
+    NoFila* inicio;
+    NoFila* fim;
 } FilaPrioridade;
 
+// Funções da fila de prioridade
 void inicializarFila(FilaPrioridade* fila);
-void inserirNaFila(FilaPrioridade* fila, Voo v);
 int filaVazia(FilaPrioridade* fila);
-Voo removerDaFila(FilaPrioridade* fila);
-void mostrarFila(FilaPrioridade* fila, int tempoAtual, const char* tipo);
+void inserirNaFila(FilaPrioridade* fila, Cliente novoCliente);
+Cliente removerDaFila(FilaPrioridade* fila);
+void mostrarFila(FilaPrioridade* fila, time_t tempoAtual, const char* titulo);
 void liberarFila(FilaPrioridade* fila);
 
 #endif
